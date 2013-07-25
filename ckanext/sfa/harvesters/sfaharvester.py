@@ -1,9 +1,7 @@
 #coding: utf-8
 
-import urllib3
 import xlrd
 import os
-from lxml import etree
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 
