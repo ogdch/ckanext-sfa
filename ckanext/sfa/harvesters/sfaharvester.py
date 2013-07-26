@@ -130,7 +130,7 @@ class SFAHarvester(HarvesterBase):
             log.debug(de_rows)
             log.debug(other_rows)
 
-            keys = ['title', 'notes', 'author', 'maintainer', 'licence']
+            keys = ['title', 'notes', 'author', 'maintainer', 'licence', 'groups']
 
             for row_idx in range(len(de_rows)):
                 for key in keys:
@@ -180,6 +180,7 @@ class SFAHarvester(HarvesterBase):
             metadata = {
                 'datasetID': row[u'id'],
                 'title': row[u'title'],
+                'url': row[u'url'],
                 'notes': row[u'notes'],
                 'author': row[u'author'],
                 'maintainer': row[u'maintainer'],
@@ -187,7 +188,7 @@ class SFAHarvester(HarvesterBase):
                 'license_id': row[u'licence'],
                 'translations': [],
                 'tags': row[u'tags'].split(u', '),
-                'groups': []
+                'groups': [row[u'groups']]
             }
 
             metadata['resources'] = self._generate_resources_dict_array(row[u'id'])
@@ -247,6 +248,19 @@ class SFAHarvester(HarvesterBase):
                 'session': Session,
                 'user': self.config['user']
             }
+
+            # Find or create group the dataset should get assigned to
+            for group_name in package_dict['groups']:
+                try:
+                    data_dict = {
+                        'id': group_name,
+                        'name': self._gen_new_name(group_name),
+                        'title': group_name
+                        }
+                    group_id = get_action('group_show')(context, data_dict)['id']
+                except:
+                    group = get_action('group_create')(context, data_dict)
+                    log.info('created the group ' + group['id'])
 
             # Find or create the organization the dataset should get assigned to.
             try:
