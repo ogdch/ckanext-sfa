@@ -35,10 +35,10 @@ class SFAHarvester(HarvesterBase):
     AWS_SECRET_KEY = config.get('ckanext.sfa.secret_key')
 
     ORGANIZATION = {
-        'de': u'Schweizerisches Bundesarchiv',
-        'fr': u'Archives fédérales suisses',
-        'it': u'Archivio federale svizzero',
-        'en': u'Swiss Federal Archives',
+        u'de': u'Schweizerisches Bundesarchiv',
+        u'fr': u'Archives fédérales suisses',
+        u'it': u'Archivio federale svizzero',
+        u'en': u'Swiss Federal Archives',
     }
     LANG_CODES = ['de', 'fr', 'it', 'en']
 
@@ -150,6 +150,14 @@ class SFAHarvester(HarvesterBase):
                             'term': de_tags[tag_idx],
                             'term_translation': other_tags[tag_idx]
                             })
+
+            for k,v in self.ORGANIZATION.items():
+                if k != u'de':
+                    translations.append({
+                        'lang_code': k,
+                        'term': self.ORGANIZATION[u'de'],
+                        'term_translation': v
+                        })
 
             return translations
 
