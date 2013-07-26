@@ -40,6 +40,7 @@ class SFAHarvester(HarvesterBase):
         'it': u'Archivio federale svizzero',
         'en': u'Swiss Federal Archives',
     }
+    LANG_CODES = ['de', 'fr', 'it', 'en']
 
     config = {
         'user': u'harvest'
@@ -96,6 +97,68 @@ class SFAHarvester(HarvesterBase):
             return []
 
 
+    def _get_row_dict_array(self, lang_index):
+        '''
+        '''
+        try:
+            metadata_workbook = xlrd.open_workbook(self.METADATA_FILE_NAME)
+            worksheet = metadata_workbook.sheet_by_index(lang_index)
+
+            # Extract the row headers
+            header_row = worksheet.row_values(6)
+            rows = []
+            for row_num in range(worksheet.nrows):
+                # Data columns begin at row count 7 (8 in Excel)
+                if row_num >= 7:
+                    rows.append(dict(zip(header_row, worksheet.row_values(row_num))))
+            return rows
+
+        except Exception, e:
+            log.exception(e)
+            return []
+
+
+    def _generate_term_translations(self, lang_index):
+        '''
+        '''
+        try:
+            translations = []
+
+            de_rows = self._get_row_dict_array(0)
+            other_rows = self._get_row_dict_array(lang_index)
+
+            log.debug(de_rows)
+            log.debug(other_rows)
+
+            keys = ['title', 'notes', 'author', 'maintainer', 'licence']
+
+            for row_idx in range(len(de_rows)):
+                for key in keys:
+                    translations.append({
+                        'lang_code': self.LANG_CODES[lang_index],
+                        'term': de_rows[row_idx][key],
+                        'term_translation': other_rows[row_idx][key]
+                        })
+
+                de_tags = de_rows[row_idx]['tags'].split(u', ')
+                other_tags = other_rows[row_idx]['tags'].split(u', ')
+
+                if len(de_tags) == len(other_tags):
+                    for tag_idx in range(len(de_tags)):
+                        translations.append({
+                            'lang_code': self.LANG_CODES[lang_index],
+                            'term': de_tags[tag_idx],
+                            'term_translation': other_tags[tag_idx]
+                            })
+
+            return translations
+
+
+        except Exception, e:
+            log.exception(e)
+            return []
+
+
     def info(self):
         return {
             'name': 'sfa',
@@ -109,48 +172,44 @@ class SFAHarvester(HarvesterBase):
         log.debug('In SFAHarvester gather_stage')
 
         self._fetch_metadata_file()
-
-        # Reading the metadata file
-        metadata_workbook = xlrd.open_workbook(self.METADATA_FILE_NAME)
-        worksheet = metadata_workbook.sheet_by_index(0)
-
-        # Extract the row headers
-        header_row = worksheet.row_values(6)
-
         ids = []
-        for row_num in range(worksheet.nrows):
 
-            # Data columns begin at row count 7 (8 in Excel)
-            if row_num >= 7:
-                row = dict(zip(header_row, worksheet.row_values(row_num)))
-                
-                # Construct the metadata dict for the dataset on CKAN
-                metadata = {
-                    'datasetID': row[u'id'],
-                    'title': row[u'title'],
-                    'notes': row[u'notes'],
-                    'author': row[u'author'],
-                    'maintainer': row[u'maintainer'],
-                    'maintainer_email': row[u'maintainer_email'],
-                    'license_id': row[u'licence'],
-                    'translations': [],
-                    'tags': row[u'tags'].split(u', '),
-                    'groups': []
-                }
+        de_rows = self._get_row_dict_array(0)
+        for row in de_rows:
+            # Construct the metadata dict for the dataset on CKAN
+            metadata = {
+                'datasetID': row[u'id'],
+                'title': row[u'title'],
+                'notes': row[u'notes'],
+                'author': row[u'author'],
+                'maintainer': row[u'maintainer'],
+                'maintainer_email': row[u'maintainer_email'],
+                'license_id': row[u'licence'],
+                'translations': [],
+                'tags': row[u'tags'].split(u', '),
+                'groups': []
+            }
 
-                metadata['resources'] = self._generate_resources_dict_array(row[u'id'])
-                log.debug(metadata['resources'])
+            metadata['resources'] = self._generate_resources_dict_array(row[u'id'])
+            log.debug(metadata['resources'])
 
-                obj = HarvestObject(
-                    guid = row[u'id'],
-                    job = harvest_job,
-                    content = json.dumps(metadata)
-                )
-                obj.save()
-                log.debug('adding ' + row[u'id'] + ' to the queue')
-                ids.append(obj.id)
+            # Adding term translations
+            metadata['translations'].extend(self._generate_term_translations(1)) # fr
+            metadata['translations'].extend(self._generate_term_translations(2)) # it
+            metadata['translations'].extend(self._generate_term_translations(3)) # en
 
-                log.debug(dict(zip(header_row, worksheet.row_values(row_num))))
+            log.debug(metadata['translations'])
+
+            obj = HarvestObject(
+                guid = row[u'id'],
+                job = harvest_job,
+                content = json.dumps(metadata)
+            )
+            obj.save()
+            log.debug('adding ' + row[u'id'] + ' to the queue')
+            ids.append(obj.id)
+
+            log.debug(de_rows)
 
         return ids
 
@@ -207,6 +266,11 @@ class SFAHarvester(HarvesterBase):
             pkg_role = model.PackageRole(package=package, user=user, role=model.Role.ADMIN)
 
             result = self._create_or_update_package(package_dict, harvest_object)
+
+            # Add the translations to the term_translations table
+            for translation in package_dict['translations']:
+                action.update.term_translation_update(context, translation)
+            Session.commit()
 
         except Exception, e:
             log.exception(e)
