@@ -10,6 +10,7 @@ from ckan import model
 from ckan.model import Session, Package
 from ckan.logic import ValidationError, NotFound, get_action, action
 from ckan.lib.helpers import json
+from ckanext.harvest.harvesters.base import munge_tag
 
 from ckanext.harvest.model import HarvestJob, HarvestObject, HarvestGatherError, \
                                     HarvestObjectError
@@ -147,8 +148,8 @@ class SFAHarvester(HarvesterBase):
                     for tag_idx in range(len(de_tags)):
                         translations.append({
                             'lang_code': self.LANG_CODES[lang_index],
-                            'term': de_tags[tag_idx],
-                            'term_translation': other_tags[tag_idx]
+                            'term': munge_tag(de_tags[tag_idx]),
+                            'term_translation': munge_tag(other_tags[tag_idx])
                             })
 
             for k,v in self.ORGANIZATION.items():
