@@ -95,7 +95,7 @@ class SFAHarvester(HarvesterBase):
             return resources
         except Exception, e:
             log.exception(e)
-            return []
+            raise
 
 
     def _get_row_dict_array(self, lang_index):
@@ -116,7 +116,7 @@ class SFAHarvester(HarvesterBase):
 
         except Exception, e:
             log.exception(e)
-            return []
+            raise
 
 
     def _generate_term_translations(self, lang_index):
@@ -165,7 +165,7 @@ class SFAHarvester(HarvesterBase):
 
         except Exception, e:
             log.exception(e)
-            return []
+            raise
 
 
     def info(self):
@@ -238,6 +238,7 @@ class SFAHarvester(HarvesterBase):
             return True
         except Exception, e:
             log.exception(e)
+            raise
 
     def import_stage(self, harvest_object):
         log.debug('In SFAHarvester import_stage')
@@ -297,5 +298,6 @@ class SFAHarvester(HarvesterBase):
 
         except Exception, e:
             log.exception(e)
+            raise
 
         return True
