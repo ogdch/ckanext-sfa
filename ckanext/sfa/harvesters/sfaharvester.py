@@ -195,6 +195,7 @@ class SFAHarvester(HarvesterBase):
                 'maintainer': row[u'maintainer'],
                 'maintainer_email': row[u'maintainer_email'],
                 'license_id': row[u'licence'],
+                'license_url': row[u'licence_url'],
                 'translations': [],
                 'tags': row[u'tags'].split(u', '),
                 'groups': [row[u'groups']]
@@ -284,6 +285,13 @@ class SFAHarvester(HarvesterBase):
             except:
                 organization = get_action('organization_create')(context, data_dict)
                 package_dict['owner_org'] = organization['id']
+            
+            # Save additional metadata in extras
+            extras = []
+            if 'license_url' in package_dict:
+                extras.append(('license_url', package_dict['license_url']))
+            package_dict['extras'] = extras
+            log.debug('Extras %s' % extras)
 
             # Insert or update the package
             package = model.Package.get(package_dict['id'])
