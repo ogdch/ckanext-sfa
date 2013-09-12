@@ -4,6 +4,7 @@ import xlrd
 import os
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
+import tempfile
 
 from ckan.lib.base import c
 from ckan import model
@@ -60,14 +61,17 @@ class SFAHarvester(HarvesterBase):
         '''
         Fetching the Excel metadata file for the SFA from the S3 Bucket and save on disk
         '''
+	temp_dir = tempfile.mkdtemp()
         try:
             metadata_file = Key(self._get_s3_bucket())
             metadata_file.key = self.METADATA_FILE_NAME
-            metadata_file.get_contents_to_filename(self.METADATA_FILE_NAME)
-            return True
+            metadata_file_path = os.path.join(temp_dir, self.METADATA_FILE_NAME)
+            log.debug('Saving metadata file to %s' % metadata_file_path)
+            metadata_file.get_contents_to_filename(metadata_file_path)
+            return metadata_file_path
         except Exception, e:
             log.exception(e)
-            return False
+            raise
 
 
     def _guess_format(self, file_name):
@@ -98,11 +102,11 @@ class SFAHarvester(HarvesterBase):
             raise
 
 
-    def _get_row_dict_array(self, lang_index):
+    def _get_row_dict_array(self, lang_index, file_path):
         '''
         '''
         try:
-            metadata_workbook = xlrd.open_workbook(self.METADATA_FILE_NAME)
+            metadata_workbook = xlrd.open_workbook(file_path)
             worksheet = metadata_workbook.sheet_by_index(lang_index)
 
             # Extract the row headers
@@ -119,14 +123,14 @@ class SFAHarvester(HarvesterBase):
             raise
 
 
-    def _generate_term_translations(self, lang_index):
+    def _generate_term_translations(self, lang_index, file_path):
         '''
         '''
         try:
             translations = []
 
-            de_rows = self._get_row_dict_array(0)
-            other_rows = self._get_row_dict_array(lang_index)
+            de_rows = self._get_row_dict_array(0, file_path)
+            other_rows = self._get_row_dict_array(lang_index, file_path)
 
             log.debug(de_rows)
             log.debug(other_rows)
@@ -179,49 +183,50 @@ class SFAHarvester(HarvesterBase):
 
     def gather_stage(self, harvest_job):
         log.debug('In SFAHarvester gather_stage')
+	try:
+            file_path = self._fetch_metadata_file()
+            ids = []
 
-        self._fetch_metadata_file()
-        ids = []
+            de_rows = self._get_row_dict_array(0, file_path)
+            for row in de_rows:
+                # Construct the metadata dict for the dataset on CKAN
+                metadata = {
+                    'datasetID': row[u'id'],
+                    'title': row[u'title'],
+                    'url': row[u'url'],
+                    'notes': row[u'notes'],
+                    'author': row[u'author'],
+                    'maintainer': row[u'maintainer'],
+                    'maintainer_email': row[u'maintainer_email'],
+                    'license_id': row[u'licence'],
+                    'license_url': row[u'licence_url'],
+                    'translations': [],
+                    'tags': row[u'tags'].split(u', '),
+                    'groups': [row[u'groups']]
+                }
 
-        de_rows = self._get_row_dict_array(0)
-        for row in de_rows:
-            # Construct the metadata dict for the dataset on CKAN
-            metadata = {
-                'datasetID': row[u'id'],
-                'title': row[u'title'],
-                'url': row[u'url'],
-                'notes': row[u'notes'],
-                'author': row[u'author'],
-                'maintainer': row[u'maintainer'],
-                'maintainer_email': row[u'maintainer_email'],
-                'license_id': row[u'licence'],
-                'license_url': row[u'licence_url'],
-                'translations': [],
-                'tags': row[u'tags'].split(u', '),
-                'groups': [row[u'groups']]
-            }
+                metadata['resources'] = self._generate_resources_dict_array(row[u'id'])
+                log.debug(metadata['resources'])
 
-            metadata['resources'] = self._generate_resources_dict_array(row[u'id'])
-            log.debug(metadata['resources'])
+                # Adding term translations
+                metadata['translations'].extend(self._generate_term_translations(1, file_path)) # fr
+                metadata['translations'].extend(self._generate_term_translations(2, file_path)) # it
+                metadata['translations'].extend(self._generate_term_translations(3, file_path)) # en
 
-            # Adding term translations
-            metadata['translations'].extend(self._generate_term_translations(1)) # fr
-            metadata['translations'].extend(self._generate_term_translations(2)) # it
-            metadata['translations'].extend(self._generate_term_translations(3)) # en
+                log.debug(metadata['translations'])
 
-            log.debug(metadata['translations'])
+                obj = HarvestObject(
+                    guid = row[u'id'],
+                    job = harvest_job,
+                    content = json.dumps(metadata)
+                )
+                obj.save()
+                log.debug('adding ' + row[u'id'] + ' to the queue')
+                ids.append(obj.id)
 
-            obj = HarvestObject(
-                guid = row[u'id'],
-                job = harvest_job,
-                content = json.dumps(metadata)
-            )
-            obj.save()
-            log.debug('adding ' + row[u'id'] + ' to the queue')
-            ids.append(obj.id)
-
-            log.debug(de_rows)
-
+                log.debug(de_rows)
+        except Exception, e:
+            return False 
         return ids
 
 
