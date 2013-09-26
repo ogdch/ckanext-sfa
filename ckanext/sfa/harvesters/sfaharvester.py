@@ -298,7 +298,7 @@ class SFAHarvester(HarvesterBase):
                 try:
                     data_dict = {
                         'id': group_name,
-                        'name': self._gen_new_name(group_name),
+                        'name': munge_title_to_name(group_name),
                         'title': group_name
                         }
                     group_id = get_action('group_show')(context, data_dict)['id']
@@ -310,8 +310,8 @@ class SFAHarvester(HarvesterBase):
             try:
                 data_dict = {
                     'permission': 'edit_group',
-                    'id': self._gen_new_name(self.ORGANIZATION['de']),
-                    'name': self._gen_new_name(self.ORGANIZATION['de']),
+                    'id': munge_title_to_name(self.ORGANIZATION['de']),
+                    'name': munge_title_to_name(self.ORGANIZATION['de']),
                     'title': self.ORGANIZATION['de']
                 }
                 package_dict['owner_org'] = get_action('organization_show')(context, data_dict)['id']
