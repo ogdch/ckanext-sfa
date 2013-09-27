@@ -4,6 +4,7 @@ import xlrd
 import os
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
+from uuid import NAMESPACE_OID, uuid4, uuid5
 import tempfile
 
 from ckan.lib.base import c
@@ -12,6 +13,7 @@ from ckan.model import Session, Package
 from ckan.logic import ValidationError, NotFound, get_action, action
 from ckan.lib.helpers import json
 from ckanext.harvest.harvesters.base import munge_tag
+from ckan.lib.munge import munge_title_to_name
 
 from ckanext.harvest.model import HarvestJob, HarvestObject, HarvestGatherError, \
                                     HarvestObjectError
@@ -171,6 +173,32 @@ class SFAHarvester(HarvesterBase):
             log.exception(e)
             raise
 
+    def _create_uuid(self, name=None):
+        '''
+        Create a new SHA-1 uuid for a given name or a random id
+        '''
+        if name:
+            new_uuid = uuid5(NAMESPACE_OID, str(name))
+        else:
+            new_uuid = uuid4()
+
+        return unicode(new_uuid)
+
+    def _gen_new_name(self, title, current_id=None):
+        '''
+        Creates a URL friendly name from a title
+
+        If the name already exists, it will add some random characters at the end
+        '''
+
+        name = munge_title_to_name(title).replace('_', '-')
+        while '--' in name:
+            name = name.replace('--', '-')
+        pkg_obj = Session.query(Package).filter(Package.name == name).first()
+        if pkg_obj and pkg_obj.id != current_id:
+            return name + str(uuid4())[:5]
+        else:
+            return name 
 
     def info(self):
         return {
@@ -183,7 +211,7 @@ class SFAHarvester(HarvesterBase):
 
     def gather_stage(self, harvest_job):
         log.debug('In SFAHarvester gather_stage')
-	try:
+        try:
             file_path = self._fetch_metadata_file()
             ids = []
 
@@ -216,7 +244,7 @@ class SFAHarvester(HarvesterBase):
                 log.debug(metadata['translations'])
 
                 obj = HarvestObject(
-                    guid = row[u'id'],
+                    guid = self._create_uuid(row[u'id']),
                     job = harvest_job,
                     content = json.dumps(metadata)
                 )
@@ -226,7 +254,7 @@ class SFAHarvester(HarvesterBase):
 
                 log.debug(de_rows)
         except Exception, e:
-            return False 
+            return False
         return ids
 
 
@@ -256,7 +284,7 @@ class SFAHarvester(HarvesterBase):
         try:
             package_dict = json.loads(harvest_object.content)
             package_dict['id'] = harvest_object.guid
-            package_dict['name'] = self._gen_new_name(package_dict[u'title'])
+            package_dict['name'] = self._gen_new_name(package_dict[u'title'], package_dict['id'])
 
             user = model.User.get(self.config['user'])
             context = {
@@ -270,7 +298,7 @@ class SFAHarvester(HarvesterBase):
                 try:
                     data_dict = {
                         'id': group_name,
-                        'name': self._gen_new_name(group_name),
+                        'name': munge_title_to_name(group_name),
                         'title': group_name
                         }
                     group_id = get_action('group_show')(context, data_dict)['id']
@@ -282,8 +310,8 @@ class SFAHarvester(HarvesterBase):
             try:
                 data_dict = {
                     'permission': 'edit_group',
-                    'id': self._gen_new_name(self.ORGANIZATION['de']),
-                    'name': self._gen_new_name(self.ORGANIZATION['de']),
+                    'id': munge_title_to_name(self.ORGANIZATION['de']),
+                    'name': munge_title_to_name(self.ORGANIZATION['de']),
                     'title': self.ORGANIZATION['de']
                 }
                 package_dict['owner_org'] = get_action('organization_show')(context, data_dict)['id']
