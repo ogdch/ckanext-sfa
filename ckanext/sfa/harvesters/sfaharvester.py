@@ -131,7 +131,7 @@ class SFAHarvester(HarvesterBase):
                 # Data columns begin at row count 7 (8 in Excel)
                 if row_num >= 7:
                     rows.append(dict(zip(header_row, worksheet.row_values(row_num))))
-                    return rows
+            return rows
 
         except Exception, e:
             log.exception(e)
@@ -207,11 +207,11 @@ class SFAHarvester(HarvesterBase):
         name = munge_title_to_name(title).replace('_', '-')
         while '--' in name:
             name = name.replace('--', '-')
-            pkg_obj = Session.query(Package).filter(Package.name == name).first()
-            if pkg_obj and pkg_obj.id != current_id:
-                return name + str(uuid4())[:5]
-            else:
-                return name
+        pkg_obj = Session.query(Package).filter(Package.name == name).first()
+        if pkg_obj and pkg_obj.id != current_id:
+            return name + str(uuid4())[:5]
+        else:
+            return name
 
     def info(self):
         return {
