@@ -266,9 +266,9 @@ class SFAHarvester(HarvesterBase):
                 ids.append(obj.id)
 
                 log.debug(de_rows)
-            except Exception, e:
-                return False
-            return ids
+        except Exception, e:
+            return False
+        return ids
 
 
     def fetch_stage(self, harvest_object):
