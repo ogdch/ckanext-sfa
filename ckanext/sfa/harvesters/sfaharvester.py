@@ -171,8 +171,8 @@ class SFAHarvester(HarvesterBase):
                             'term_translation': munge_tag(other_tags[tag_idx])
                         })
 
-            for k,v in self.ORGANIZATION.items():
-                if k != u'de':
+            for lang, org in self.ORGANIZATION.items():
+                if lang != 'de':
                     for field in ['name', 'description']:
                         translations.append({
                             'lang_code': lang,
