@@ -39,10 +39,23 @@ class SFAHarvester(HarvesterBase):
     AWS_SECRET_KEY = config.get('ckanext.sfa.secret_key')
 
     ORGANIZATION = {
-        u'de': u'Schweizerisches Bundesarchiv',
-        u'fr': u'Archives fédérales suisses',
-        u'it': u'Archivio federale svizzero',
-        u'en': u'Swiss Federal Archives',
+        'de': {
+            'name': u'Schweizerisches Bundesarchiv',
+            'description': u'Das Dienstleistungs- und Kompetenzzentrum des Bundes für nachhaltiges Informationsmanagement.',
+            'website': u'http://www.bar.admin.ch/'
+        },
+        'fr': {
+            'name': u'Archives fédérales suisses',
+            'description': u'Le centre de prestations et de compétences de la Confédération pour une gestion durable de l’information.'
+        },
+        'it': {
+            'name': u'Archivio federale svizzero',
+            'description': u'Il centro di servizio e competenza della Confederazione per la gestione a lungo termine delle informazioni.'
+        },
+        'en': {
+            'name': u'Swiss Federal Archives',
+            'description': u'The Confederation\'s service and competence centre for lasting information management.'
+        }
     }
     LANG_CODES = ['de', 'fr', 'it', 'en']
 
@@ -63,7 +76,7 @@ class SFAHarvester(HarvesterBase):
         '''
         Fetching the Excel metadata file for the SFA from the S3 Bucket and save on disk
         '''
-	temp_dir = tempfile.mkdtemp()
+        temp_dir = tempfile.mkdtemp()
         try:
             metadata_file = Key(self._get_s3_bucket())
             metadata_file.key = self.METADATA_FILE_NAME
@@ -97,7 +110,7 @@ class SFAHarvester(HarvesterBase):
                         'url': self.FILES_BASE_URL + '/' + file.key,
                         'name': file.key.replace(prefix, u''),
                         'format': self._guess_format(file.key)
-                        })
+                    })
             return resources
         except Exception, e:
             log.exception(e)
@@ -145,7 +158,7 @@ class SFAHarvester(HarvesterBase):
                         'lang_code': self.LANG_CODES[lang_index],
                         'term': de_rows[row_idx][key],
                         'term_translation': other_rows[row_idx][key]
-                        })
+                    })
 
                 de_tags = de_rows[row_idx]['tags'].split(u', ')
                 other_tags = other_rows[row_idx]['tags'].split(u', ')
@@ -156,18 +169,18 @@ class SFAHarvester(HarvesterBase):
                             'lang_code': self.LANG_CODES[lang_index],
                             'term': munge_tag(de_tags[tag_idx]),
                             'term_translation': munge_tag(other_tags[tag_idx])
-                            })
+                        })
 
-            for k,v in self.ORGANIZATION.items():
-                if k != u'de':
-                    translations.append({
-                        'lang_code': k,
-                        'term': self.ORGANIZATION[u'de'],
-                        'term_translation': v
+            for lang, org in self.ORGANIZATION.items():
+                if lang != 'de':
+                    for field in ['name', 'description']:
+                        translations.append({
+                            'lang_code': lang,
+                            'term': self.ORGANIZATION['de'][field],
+                            'term_translation': org[field]
                         })
 
             return translations
-
 
         except Exception, e:
             log.exception(e)
@@ -198,7 +211,7 @@ class SFAHarvester(HarvesterBase):
         if pkg_obj and pkg_obj.id != current_id:
             return name + str(uuid4())[:5]
         else:
-            return name 
+            return name
 
     def info(self):
         return {
@@ -300,7 +313,7 @@ class SFAHarvester(HarvesterBase):
                         'id': group_name,
                         'name': munge_title_to_name(group_name),
                         'title': group_name
-                        }
+                    }
                     group_id = get_action('group_show')(context, data_dict)['id']
                 except:
                     group = get_action('group_create')(context, data_dict)
@@ -310,15 +323,22 @@ class SFAHarvester(HarvesterBase):
             try:
                 data_dict = {
                     'permission': 'edit_group',
-                    'id': munge_title_to_name(self.ORGANIZATION['de']),
-                    'name': munge_title_to_name(self.ORGANIZATION['de']),
-                    'title': self.ORGANIZATION['de']
+                    'id': munge_title_to_name(self.ORGANIZATION['de']['name']),
+                    'name': munge_title_to_name(self.ORGANIZATION['de']['name']),
+                    'title': self.ORGANIZATION['de']['name'],
+                    'description': self.ORGANIZATION['de']['description'],
+                    'extras': [
+                        {
+                            'key': 'website',
+                            'value': self.ORGANIZATION['de']['website']
+                        }
+                    ]
                 }
                 package_dict['owner_org'] = get_action('organization_show')(context, data_dict)['id']
             except:
                 organization = get_action('organization_create')(context, data_dict)
                 package_dict['owner_org'] = organization['id']
-            
+
             # Save additional metadata in extras
             extras = []
             if 'license_url' in package_dict:
