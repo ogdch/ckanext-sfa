@@ -320,20 +320,20 @@ class SFAHarvester(HarvesterBase):
                     log.info('created the group ' + group['id'])
 
             # Find or create the organization the dataset should get assigned to.
+            data_dict = {
+                'permission': 'edit_group',
+                'id': munge_title_to_name(self.ORGANIZATION['de']['name']),
+                'name': munge_title_to_name(self.ORGANIZATION['de']['name']),
+                'title': self.ORGANIZATION['de']['name'],
+                'description': self.ORGANIZATION['de']['description'],
+                'extras': [
+                    {
+                        'key': 'website',
+                        'value': self.ORGANIZATION['de']['website']
+                    }
+                ]
+            }
             try:
-                data_dict = {
-                    'permission': 'edit_group',
-                    'id': munge_title_to_name(self.ORGANIZATION['de']['name']),
-                    'name': munge_title_to_name(self.ORGANIZATION['de']['name']),
-                    'title': self.ORGANIZATION['de']['name'],
-                    'description': self.ORGANIZATION['de']['description'],
-                    'extras': [
-                        {
-                            'key': 'website',
-                            'value': self.ORGANIZATION['de']['website']
-                        }
-                    ]
-                }
                 package_dict['owner_org'] = get_action('organization_show')(context, data_dict)['id']
             except:
                 organization = get_action('organization_create')(context, data_dict)
