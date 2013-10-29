@@ -46,7 +46,7 @@ class SFAHarvester(HarvesterBase):
         },
         'fr': {
             'name': u'Archives fédérales suisses',
-            'description': u'Le centre de prestations et de compétences de la Confédération pour une gestion durable de l’information.'
+            'description': u"Le centre de prestations et de compétences de la Confédération pour une gestion durable de l'information."
         },
         'it': {
             'name': u'Archivio federale svizzero',
@@ -54,7 +54,7 @@ class SFAHarvester(HarvesterBase):
         },
         'en': {
             'name': u'Swiss Federal Archives',
-            'description': u'The Confederation\'s service and competence centre for lasting information management.'
+            'description': u"The Confederation's service and competence centre for lasting information management."
         }
     }
     LANG_CODES = ['de', 'fr', 'it', 'en']
