@@ -4,6 +4,7 @@ import xlrd
 import os
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
+from uuid import NAMESPACE_OID, uuid4, uuid5
 import tempfile
 
 from ckan.lib.base import c
@@ -12,6 +13,7 @@ from ckan.model import Session, Package
 from ckan.logic import ValidationError, NotFound, get_action, action
 from ckan.lib.helpers import json
 from ckanext.harvest.harvesters.base import munge_tag
+from ckan.lib.munge import munge_title_to_name
 
 from ckanext.harvest.model import HarvestJob, HarvestObject, HarvestGatherError, \
                                     HarvestObjectError
@@ -37,10 +39,23 @@ class SFAHarvester(HarvesterBase):
     AWS_SECRET_KEY = config.get('ckanext.sfa.secret_key')
 
     ORGANIZATION = {
-        u'de': u'Schweizerisches Bundesarchiv',
-        u'fr': u'Archives fédérales suisses',
-        u'it': u'Archivio federale svizzero',
-        u'en': u'Swiss Federal Archives',
+        'de': {
+            'name': u'Schweizerisches Bundesarchiv',
+            'description': u'Das Dienstleistungs- und Kompetenzzentrum des Bundes für nachhaltiges Informationsmanagement.',
+            'website': u'http://www.bar.admin.ch/'
+        },
+        'fr': {
+            'name': u'Archives fédérales suisses',
+            'description': u"Le centre de prestations et de compétences de la Confédération pour une gestion durable de l'information."
+        },
+        'it': {
+            'name': u'Archivio federale svizzero',
+            'description': u'Il centro di servizio e competenza della Confederazione per la gestione a lungo termine delle informazioni.'
+        },
+        'en': {
+            'name': u'Swiss Federal Archives',
+            'description': u"The Confederation's service and competence centre for lasting information management."
+        }
     }
     LANG_CODES = ['de', 'fr', 'it', 'en']
 
@@ -61,7 +76,7 @@ class SFAHarvester(HarvesterBase):
         '''
         Fetching the Excel metadata file for the SFA from the S3 Bucket and save on disk
         '''
-	temp_dir = tempfile.mkdtemp()
+        temp_dir = tempfile.mkdtemp()
         try:
             metadata_file = Key(self._get_s3_bucket())
             metadata_file.key = self.METADATA_FILE_NAME
@@ -95,7 +110,7 @@ class SFAHarvester(HarvesterBase):
                         'url': self.FILES_BASE_URL + '/' + file.key,
                         'name': file.key.replace(prefix, u''),
                         'format': self._guess_format(file.key)
-                        })
+                    })
             return resources
         except Exception, e:
             log.exception(e)
@@ -143,7 +158,7 @@ class SFAHarvester(HarvesterBase):
                         'lang_code': self.LANG_CODES[lang_index],
                         'term': de_rows[row_idx][key],
                         'term_translation': other_rows[row_idx][key]
-                        })
+                    })
 
                 de_tags = de_rows[row_idx]['tags'].split(u', ')
                 other_tags = other_rows[row_idx]['tags'].split(u', ')
@@ -154,23 +169,49 @@ class SFAHarvester(HarvesterBase):
                             'lang_code': self.LANG_CODES[lang_index],
                             'term': munge_tag(de_tags[tag_idx]),
                             'term_translation': munge_tag(other_tags[tag_idx])
-                            })
+                        })
 
-            for k,v in self.ORGANIZATION.items():
-                if k != u'de':
-                    translations.append({
-                        'lang_code': k,
-                        'term': self.ORGANIZATION[u'de'],
-                        'term_translation': v
+            for lang, org in self.ORGANIZATION.items():
+                if lang != 'de':
+                    for field in ['name', 'description']:
+                        translations.append({
+                            'lang_code': lang,
+                            'term': self.ORGANIZATION['de'][field],
+                            'term_translation': org[field]
                         })
 
             return translations
-
 
         except Exception, e:
             log.exception(e)
             raise
 
+    def _create_uuid(self, name=None):
+        '''
+        Create a new SHA-1 uuid for a given name or a random id
+        '''
+        if name:
+            new_uuid = uuid5(NAMESPACE_OID, str(name))
+        else:
+            new_uuid = uuid4()
+
+        return unicode(new_uuid)
+
+    def _gen_new_name(self, title, current_id=None):
+        '''
+        Creates a URL friendly name from a title
+
+        If the name already exists, it will add some random characters at the end
+        '''
+
+        name = munge_title_to_name(title).replace('_', '-')
+        while '--' in name:
+            name = name.replace('--', '-')
+        pkg_obj = Session.query(Package).filter(Package.name == name).first()
+        if pkg_obj and pkg_obj.id != current_id:
+            return name + str(uuid4())[:5]
+        else:
+            return name
 
     def info(self):
         return {
@@ -183,7 +224,7 @@ class SFAHarvester(HarvesterBase):
 
     def gather_stage(self, harvest_job):
         log.debug('In SFAHarvester gather_stage')
-	try:
+        try:
             file_path = self._fetch_metadata_file()
             ids = []
 
@@ -216,7 +257,7 @@ class SFAHarvester(HarvesterBase):
                 log.debug(metadata['translations'])
 
                 obj = HarvestObject(
-                    guid = row[u'id'],
+                    guid = self._create_uuid(row[u'id']),
                     job = harvest_job,
                     content = json.dumps(metadata)
                 )
@@ -226,7 +267,7 @@ class SFAHarvester(HarvesterBase):
 
                 log.debug(de_rows)
         except Exception, e:
-            return False 
+            return False
         return ids
 
 
@@ -256,7 +297,7 @@ class SFAHarvester(HarvesterBase):
         try:
             package_dict = json.loads(harvest_object.content)
             package_dict['id'] = harvest_object.guid
-            package_dict['name'] = self._gen_new_name(package_dict[u'title'])
+            package_dict['name'] = self._gen_new_name(package_dict[u'title'], package_dict['id'])
 
             user = model.User.get(self.config['user'])
             context = {
@@ -270,27 +311,34 @@ class SFAHarvester(HarvesterBase):
                 try:
                     data_dict = {
                         'id': group_name,
-                        'name': self._gen_new_name(group_name),
+                        'name': munge_title_to_name(group_name),
                         'title': group_name
-                        }
+                    }
                     group_id = get_action('group_show')(context, data_dict)['id']
                 except:
                     group = get_action('group_create')(context, data_dict)
                     log.info('created the group ' + group['id'])
 
             # Find or create the organization the dataset should get assigned to.
+            data_dict = {
+                'permission': 'edit_group',
+                'id': munge_title_to_name(self.ORGANIZATION['de']['name']),
+                'name': munge_title_to_name(self.ORGANIZATION['de']['name']),
+                'title': self.ORGANIZATION['de']['name'],
+                'description': self.ORGANIZATION['de']['description'],
+                'extras': [
+                    {
+                        'key': 'website',
+                        'value': self.ORGANIZATION['de']['website']
+                    }
+                ]
+            }
             try:
-                data_dict = {
-                    'permission': 'edit_group',
-                    'id': self._gen_new_name(self.ORGANIZATION['de']),
-                    'name': self._gen_new_name(self.ORGANIZATION['de']),
-                    'title': self.ORGANIZATION['de']
-                }
                 package_dict['owner_org'] = get_action('organization_show')(context, data_dict)['id']
             except:
                 organization = get_action('organization_create')(context, data_dict)
                 package_dict['owner_org'] = organization['id']
-            
+
             # Save additional metadata in extras
             extras = []
             if 'license_url' in package_dict:
