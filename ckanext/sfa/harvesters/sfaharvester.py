@@ -29,14 +29,14 @@ class SFAHarvester(HarvesterBase):
     The harvester for the SFA
     '''
 
-    BUCKET_NAME = u'bar-opendata-ch'
+    BUCKET_NAME = config.get('ckanext.sfa.s3_bucket')
     METADATA_FILE_NAME = u'OGD@Bund Metadaten BAR.xlsx'
     DEPARTMENT_BASE = u'ch.bar.'
-    FILES_BASE_URL = 'http://bar-opendata-ch.s3.amazonaws.com'
+    FILES_BASE_URL = 'http://' + BUCKET_NAME + '.s3.amazonaws.com'
 
     # Define the keys in the CKAN .ini file
-    AWS_ACCESS_KEY = config.get('ckanext.sfa.access_key')
-    AWS_SECRET_KEY = config.get('ckanext.sfa.secret_key')
+    AWS_ACCESS_KEY = config.get('ckanext.sfa.s3_key')
+    AWS_SECRET_KEY = config.get('ckanext.sfa.s3_token')
 
     ORGANIZATION = {
         'de': {
