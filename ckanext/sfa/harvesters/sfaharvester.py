@@ -109,7 +109,8 @@ class SFAHarvester(HarvesterBase):
                     resources.append({
                         'url': self.FILES_BASE_URL + '/' + file.key,
                         'name': file.key.replace(prefix, u''),
-                        'format': self._guess_format(file.key)
+                        'format': self._guess_format(file.key),
+                        'size': self._get_s3_bucket().lookup(file.key).size
                     })
             return resources
         except Exception, e:
