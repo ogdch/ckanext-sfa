@@ -246,7 +246,6 @@ class SFAHarvester(HarvesterBase):
                     'tags': row[u'tags'].split(u', '),
                     'groups': [row[u'groups']]
                 }
-                log.debug('Metatdata dict constructed.')
 
                 metadata['resources'] = self._generate_resources_dict_array(row[u'id'])
                 metadata['resources'][0]['version'] = row[u'version']
