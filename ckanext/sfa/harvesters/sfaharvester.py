@@ -110,8 +110,7 @@ class SFAHarvester(HarvesterBase):
                         'url': self.FILES_BASE_URL + '/' + file.key,
                         'name': file.key.replace(prefix, u''),
                         'format': self._guess_format(file.key),
-                        'size': self._get_s3_bucket().lookup(file.key).size,
-                        'version': self._get_s3_bucket().lookup(file.key).last_modified
+                        'size': self._get_s3_bucket().lookup(file.key).size
                     })
             return resources
         except Exception, e:
@@ -247,8 +246,10 @@ class SFAHarvester(HarvesterBase):
                     'tags': row[u'tags'].split(u', '),
                     'groups': [row[u'groups']]
                 }
+                log.debug('Metatdata dict constructed.')
 
                 metadata['resources'] = self._generate_resources_dict_array(row[u'id'])
+                metadata['resources'][0]['version'] = row[u'version']
                 log.debug(metadata['resources'])
 
                 # Adding term translations
