@@ -118,13 +118,13 @@ class SFAHarvester(HarvesterBase):
             prefix = self.DEPARTMENT_BASE + dataset_id + u'/'
             bucket_list = self._get_s3_bucket().list(prefix=prefix)
             for file in bucket_list:
-                if file.key != prefix:
-                    resources.append({
-                        'url': self.FILES_BASE_URL + '/' + file.key,
-                        'name': file.key.replace(prefix, u''),
-                        'format': self._guess_format(file.key),
-                        'size': self._get_s3_bucket().lookup(file.key).size
-                    })
+                log.debug(file.key)
+                resources.append({
+                    'url': self.FILES_BASE_URL + '/' + file.key,
+                    'name': file.key.replace(prefix, u''),
+                    'format': self._guess_format(file.key),
+                    'size': self._get_s3_bucket().lookup(file.key).size
+                })
             return resources
         except Exception, e:
             log.exception(e)
