@@ -7,22 +7,21 @@ from boto.s3.key import Key
 from uuid import NAMESPACE_OID, uuid4, uuid5
 import tempfile
 
-from ckan.lib.base import c
 from ckan import model
 from ckan.model import Session, Package
-from ckan.logic import ValidationError, NotFound, get_action, action
+from ckan.logic import get_action, action
 from ckan.lib.helpers import json
 from ckanext.harvest.harvesters.base import munge_tag
 from ckan.lib.munge import munge_title_to_name
 
-from ckanext.harvest.model import HarvestJob, HarvestObject, HarvestGatherError, \
-                                    HarvestObjectError
+from ckanext.harvest.model import HarvestObject
 from ckanext.harvest.harvesters import HarvesterBase
 
 from pylons import config
 
 import logging
 log = logging.getLogger(__name__)
+
 
 class SFAHarvester(HarvesterBase):
     '''
@@ -41,20 +40,32 @@ class SFAHarvester(HarvesterBase):
     ORGANIZATION = {
         'de': {
             'name': u'Schweizerisches Bundesarchiv',
-            'description': u'Das Dienstleistungs- und Kompetenzzentrum des Bundes für nachhaltiges Informationsmanagement.',
+            'description': (
+                u'Das Dienstleistungs- und Kompetenzzentrum des Bundes '
+                u'für nachhaltiges Informationsmanagement.'
+            ),
             'website': u'http://www.bar.admin.ch/'
         },
         'fr': {
             'name': u'Archives fédérales suisses',
-            'description': u"Le centre de prestations et de compétences de la Confédération pour une gestion durable de l'information."
+            'description': (
+                u"Le centre de prestations et de compétences de la "
+                u"Confédération pour une gestion durable de l'information."
+            )
         },
         'it': {
             'name': u'Archivio federale svizzero',
-            'description': u'Il centro di servizio e competenza della Confederazione per la gestione a lungo termine delle informazioni.'
+            'description': (
+                u'Il centro di servizio e competenza della Confederazione '
+                u'per la gestione a lungo termine delle informazioni.'
+            )
         },
         'en': {
             'name': u'Swiss Federal Archives',
-            'description': u"The Confederation's service and competence centre for lasting information management."
+            'description': (
+                u"The Confederation's service and competence centre "
+                u"for lasting information management."
+            )
         }
     }
     LANG_CODES = ['de', 'fr', 'it', 'en']
@@ -71,23 +82,25 @@ class SFAHarvester(HarvesterBase):
         bucket = conn.get_bucket(self.BUCKET_NAME)
         return bucket
 
-
     def _fetch_metadata_file(self):
         '''
-        Fetching the Excel metadata file for the SFA from the S3 Bucket and save on disk
+        Fetching the Excel metadata file for the SFA
+        from the S3 Bucket and save on disk
         '''
         temp_dir = tempfile.mkdtemp()
         try:
             metadata_file = Key(self._get_s3_bucket())
             metadata_file.key = self.METADATA_FILE_NAME
-            metadata_file_path = os.path.join(temp_dir, self.METADATA_FILE_NAME)
+            metadata_file_path = os.path.join(
+                temp_dir,
+                self.METADATA_FILE_NAME
+            )
             log.debug('Saving metadata file to %s' % metadata_file_path)
             metadata_file.get_contents_to_filename(metadata_file_path)
             return metadata_file_path
         except Exception, e:
             log.exception(e)
             raise
-
 
     def _guess_format(self, file_name):
         '''
@@ -105,17 +118,17 @@ class SFAHarvester(HarvesterBase):
             prefix = self.DEPARTMENT_BASE + dataset_id + u'/'
             bucket_list = self._get_s3_bucket().list(prefix=prefix)
             for file in bucket_list:
-                if file.key != prefix:
-                    resources.append({
-                        'url': self.FILES_BASE_URL + '/' + file.key,
-                        'name': file.key.replace(prefix, u''),
-                        'format': self._guess_format(file.key)
-                    })
+                log.debug(file.key)
+                resources.append({
+                    'url': self.FILES_BASE_URL + '/' + file.key,
+                    'name': file.key.replace(prefix, u''),
+                    'format': self._guess_format(file.key),
+                    'size': self._get_s3_bucket().lookup(file.key).size
+                })
             return resources
         except Exception, e:
             log.exception(e)
             raise
-
 
     def _get_row_dict_array(self, lang_index, file_path):
         '''
@@ -130,13 +143,15 @@ class SFAHarvester(HarvesterBase):
             for row_num in range(worksheet.nrows):
                 # Data columns begin at row count 7 (8 in Excel)
                 if row_num >= 7:
-                    rows.append(dict(zip(header_row, worksheet.row_values(row_num))))
+                    rows.append(dict(zip(
+                        header_row,
+                        worksheet.row_values(row_num)
+                    )))
             return rows
 
         except Exception, e:
             log.exception(e)
             raise
-
 
     def _generate_term_translations(self, lang_index, file_path):
         '''
@@ -150,7 +165,14 @@ class SFAHarvester(HarvesterBase):
             log.debug(de_rows)
             log.debug(other_rows)
 
-            keys = ['title', 'notes', 'author', 'maintainer', 'licence', 'groups']
+            keys = [
+                'title',
+                'notes',
+                'author',
+                'maintainer',
+                'licence',
+                'groups'
+            ]
 
             for row_idx in range(len(de_rows)):
                 for key in keys:
@@ -201,7 +223,8 @@ class SFAHarvester(HarvesterBase):
         '''
         Creates a URL friendly name from a title
 
-        If the name already exists, it will add some random characters at the end
+        If the name already exists, it will add
+        some random characters at the end
         '''
 
         name = munge_title_to_name(title).replace('_', '-')
@@ -220,7 +243,6 @@ class SFAHarvester(HarvesterBase):
             'description': 'Harvests the SFA data',
             'form_config_interface': 'Text'
         }
-
 
     def gather_stage(self, harvest_job):
         log.debug('In SFAHarvester gather_stage')
@@ -246,30 +268,38 @@ class SFAHarvester(HarvesterBase):
                     'groups': [row[u'groups']]
                 }
 
-                metadata['resources'] = self._generate_resources_dict_array(row[u'id'])
+                metadata['resources'] = self._generate_resources_dict_array(
+                    row[u'id']
+                )
+                metadata['resources'][0]['version'] = row[u'version']
                 log.debug(metadata['resources'])
 
                 # Adding term translations
-                metadata['translations'].extend(self._generate_term_translations(1, file_path)) # fr
-                metadata['translations'].extend(self._generate_term_translations(2, file_path)) # it
-                metadata['translations'].extend(self._generate_term_translations(3, file_path)) # en
+                metadata['translations'].extend(
+                    self._generate_term_translations(1, file_path)  # fr
+                )
+                metadata['translations'].extend(
+                    self._generate_term_translations(2, file_path)  # it
+                )
+                metadata['translations'].extend(
+                    self._generate_term_translations(3, file_path)  # en
+                )
 
                 log.debug(metadata['translations'])
 
                 obj = HarvestObject(
-                    guid = self._create_uuid(row[u'id']),
-                    job = harvest_job,
-                    content = json.dumps(metadata)
+                    guid=self._create_uuid(row[u'id']),
+                    job=harvest_job,
+                    content=json.dumps(metadata)
                 )
                 obj.save()
                 log.debug('adding ' + row[u'id'] + ' to the queue')
                 ids.append(obj.id)
 
                 log.debug(de_rows)
-        except Exception, e:
+        except Exception:
             return False
         return ids
-
 
     def fetch_stage(self, harvest_object):
         log.debug('In SFAHarvester fetch_stage')
@@ -297,7 +327,10 @@ class SFAHarvester(HarvesterBase):
         try:
             package_dict = json.loads(harvest_object.content)
             package_dict['id'] = harvest_object.guid
-            package_dict['name'] = self._gen_new_name(package_dict[u'title'], package_dict['id'])
+            package_dict['name'] = self._gen_new_name(
+                package_dict[u'title'],
+                package_dict['id']
+            )
 
             user = model.User.get(self.config['user'])
             context = {
@@ -314,12 +347,14 @@ class SFAHarvester(HarvesterBase):
                         'name': munge_title_to_name(group_name),
                         'title': group_name
                     }
-                    group_id = get_action('group_show')(context, data_dict)['id']
+                    group = get_action('group_show')(context, data_dict)
+                    log.info('found the group ' + group['id'])
                 except:
                     group = get_action('group_create')(context, data_dict)
                     log.info('created the group ' + group['id'])
 
-            # Find or create the organization the dataset should get assigned to.
+            # Find or create the organization
+            # the dataset should get assigned to.
             data_dict = {
                 'permission': 'edit_group',
                 'id': munge_title_to_name(self.ORGANIZATION['de']['name']),
@@ -334,9 +369,15 @@ class SFAHarvester(HarvesterBase):
                 ]
             }
             try:
-                package_dict['owner_org'] = get_action('organization_show')(context, data_dict)['id']
+                package_dict['owner_org'] = get_action('organization_show')(
+                    context,
+                    data_dict
+                )['id']
             except:
-                organization = get_action('organization_create')(context, data_dict)
+                organization = get_action('organization_create')(
+                    context,
+                    data_dict
+                )
                 package_dict['owner_org'] = organization['id']
 
             # Save additional metadata in extras
@@ -348,9 +389,13 @@ class SFAHarvester(HarvesterBase):
 
             # Insert or update the package
             package = model.Package.get(package_dict['id'])
-            pkg_role = model.PackageRole(package=package, user=user, role=model.Role.ADMIN)
+            model.PackageRole(
+                package=package,
+                user=user,
+                role=model.Role.ADMIN
+            )
 
-            result = self._create_or_update_package(package_dict, harvest_object)
+            self._create_or_update_package(package_dict, harvest_object)
 
             # Add the translations to the term_translations table
             for translation in package_dict['translations']:
